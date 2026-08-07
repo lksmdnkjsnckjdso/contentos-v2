@@ -1,0 +1,211 @@
+// ContentOS schema — Instagram personal-branding SaaS
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Tier {
+  FREE
+  PRO
+  AGENCY
+}
+
+enum SlotStatus {
+  IDEA
+  WRITING
+  READY
+  SCHEDULED
+  POSTED
+}
+
+enum MediaType {
+  REEL
+  CAROUSEL
+  STORY
+  SINGLE
+}
+
+enum SnapshotSource {
+  SCRAPED
+  CSV
+}
+
+model User {
+  id               String            @id @default(cuid())
+  email            String            @unique
+  name             String?
+  image            String?
+  tier             Tier              @default(FREE)
+  onboardingStep   Int               @default(0)
+  onboardingDone   Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  brandConfig      BrandConfig?
+  accounts         InstagramAccount[]
+  competitors      Competitor[]
+  nicheResearch    NicheResearch[]
+  contentSlots     ContentSlot[]
+  sessions         Session[]
+}
+
+model BrandConfig {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String   @unique
+  niche          String
+  handle         String
+  goal           String
+  audience       String
+  tone           String
+  pillars        String   @default("[]") // JSON: array of {name, description}
+  hashtagBank    String   @default("[]") // JSON: array of strings
+  postingDays    String   @default("[]") // JSON: array of weekday ints (0-6)
+  postingTime    String   @default("18:00")
+  updatedAt      DateTime @updatedAt
+}
+
+model InstagramAccount {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  igId             String   @unique // "scrape:<username>" placeholder until OAuth connects
+  username         String
+  displayName      String?
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiresAt   DateTime?
+  connected        Boolean  @default(false)
+  source           String   @default("oauth") // "oauth" | "scrape"
+  followerCount    Int      @default(0)
+  followingCount   Int      @default(0)
+  mediaCount       Int      @default(0)
+  snapshots        ProfileSnapshot[]
+  posts            Post[]
+  updatedAt        DateTime @updatedAt
+  @@unique([userId, username])
+}
+
+model ProfileSnapshot {
+  id              String          @id @default(cuid())
+  account         InstagramAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId       String
+  date            DateTime        @default(now())
+  followers       Int
+  following       Int
+  mediaCount      Int
+  engagementRate  Float           @default(0)
+  reach           Int             @default(0)
+  impressions     Int             @default(0)
+  profileViews    Int             @default(0)
+  source          String          @default("scrape") // "seed" | "scrape" | "oauth" | "demo"
+  @@unique([accountId, date])
+}
+
+model Post {
+  id            String    @id @default(cuid())
+  account       InstagramAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId     String
+  igId          String?   @unique
+  caption       String?
+  mediaType     MediaType @default(SINGLE)
+  mediaUrl      String?
+  postedAt      DateTime
+  likes         Int       @default(0)
+  comments      Int       @default(0)
+  saves         Int       @default(0)
+  shares        Int       @default(0)
+  reach         Int       @default(0)
+  impressions   Int       @default(0)
+  @@index([accountId, postedAt])
+}
+
+model Competitor {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String
+  username         String
+  displayName      String?
+  category         String?
+  followerRange    String?
+  engagementQuality String?
+  reasonSelected   String?
+  audienceType     String?
+  researchPriority Int?
+  lastAnalyzedAt   DateTime?
+  snapshots        CompetitorSnapshot[]
+  @@unique([userId, username])
+}
+
+model NicheResearch {
+  id                      String   @id @default(cuid())
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                  String
+  nicheSummary            String   @default("")
+  competitors             String   @default("[]") // JSON: discovered competitors
+  emergingCreators        String   @default("[]") // JSON
+  authorityCreators       String   @default("[]") // JSON
+  contentOpportunities    String   @default("[]") // JSON
+  researchRecommendations String   @default("[]") // JSON
+  createdAt               DateTime @default(now())
+  @@index([userId, createdAt])
+}
+
+model CompetitorSnapshot {
+  id               String     @id @default(cuid())
+  competitor       Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  competitorId     String
+  date             DateTime   @default(now())
+  followers        Int
+  following        Int
+  posts            Int
+  engagementRate   Float
+  avgLikes         Float
+  avgComments      Float
+  postingFrequency Float // posts per week
+  topHashtags      String         @default("[]") // JSON
+  themes           String         @default("[]") // JSON: array of {theme, share, engagement}
+  report           String? // LLM markdown report
+  reportJson       String? // LLM structured JSON
+  source           SnapshotSource @default(SCRAPED)
+}
+
+model ContentSlot {
+  id          String     @id @default(cuid())
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  date        DateTime
+  time        String     @default("18:00")
+  mediaType   MediaType  @default(REEL)
+  pillar      String?
+  status      SlotStatus @default(IDEA)
+  draft       ContentDraft?
+  @@index([userId, date])
+}
+
+model ContentDraft {
+  id            String    @id @default(cuid())
+  slot          ContentSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slotId        String    @unique
+  topic         String
+  hookVariants  String    @default("[]") // JSON: array of strings
+  script        String? // timed script
+  caption       String?
+  hashtags      String    @default("[]") // JSON
+  cta           String?
+  thumbnailIdea String?
+  aiParams      String    @default("{}") // JSON
+  updatedAt     DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
