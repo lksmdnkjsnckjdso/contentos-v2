@@ -1,9 +1,13 @@
 import Groq from "groq-sdk";
 import { z } from "zod";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 const MODEL = process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile";
+
+let groq: Groq | null = null;
+function client(): Groq {
+  if (!groq) groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  return groq;
+}
 
 /**
  * Ask the LLM for a single JSON object. Models follow a concrete inline
@@ -26,7 +30,7 @@ You MUST reply with a single JSON object, nothing else — no markdown fences, n
 The JSON MUST follow this exact structure (every key required):
 ${JSON.stringify(example, null, 2)}`;
 
-  const res = await groq.chat.completions.create({
+  const res = await client().chat.completions.create({
     model: MODEL,
     temperature,
     max_tokens: maxTokens,
