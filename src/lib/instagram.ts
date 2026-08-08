@@ -69,6 +69,9 @@ export async function scrapeInstagramProfile(
   const fromWeb = await tryMobileWebProfile(username);
   if (fromWeb) return fromWeb;
 
+  const fromApify = await tryApifyProfile(username);
+  if (fromApify) return fromApify;
+
   return {
     username: username.replace("@", ""),
     fullName: null,
@@ -80,6 +83,63 @@ export async function scrapeInstagramProfile(
     recentPosts: [],
     source: "fallback",
   };
+}
+
+/**
+ * Hosted Instagram scraper (Apify actor) — the fallback that works from
+ * serverless hosts like Vercel, where Instagram blocks direct requests.
+ * Requires APIFY_TOKEN (and optionally APIFY_ACTOR_ID, default:
+ * clockworks/free-instagram-scraper).
+ */
+async function tryApifyProfile(username: string): Promise<ScrapedProfile | null> {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return null;
+  const actorId = process.env.APIFY_ACTOR_ID ?? "clockworks/free-instagram-scraper";
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=120`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ usernames: [username.replace("@", "")] }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(120_000),
+      }
+    );
+    if (!res.ok) throw new Error(`Apify returned ${res.status}`);
+    const items = (await res.json()) as {
+      username?: string;
+      fullName?: string | null;
+      followersCount?: number;
+      followingCount?: number;
+      postsCount?: number;
+      biography?: string | null;
+      isPrivate?: boolean;
+      recentPosts?: { caption?: string | null; likesCount?: number; commentsCount?: number; timestamp?: string; mediaType?: string }[];
+    }[];
+    const item = items[0];
+    if (!item?.username) throw new Error("Apify returned no profile");
+
+    return {
+      username: item.username,
+      fullName: item.fullName ?? null,
+      followers: item.followersCount ?? 0,
+      following: item.followingCount ?? 0,
+      posts: item.postsCount ?? 0,
+      biography: item.biography ?? null,
+      profilePic: null,
+      recentPosts: (item.recentPosts ?? []).slice(0, 12).map((p) => ({
+        caption: p.caption ?? null,
+        likes: p.likesCount ?? 0,
+        comments: p.commentsCount ?? 0,
+        mediaType: p.mediaType ?? null,
+        timestamp: p.timestamp ? Math.floor(new Date(p.timestamp).getTime() / 1000) : 0,
+      })),
+      source: "scrape",
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
