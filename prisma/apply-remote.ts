@@ -5,7 +5,6 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
 
 const url = process.env.DATABASE_URL;
@@ -43,7 +42,7 @@ async function main() {
   for (const name of dirs) {
     if (applied.has(name)) continue;
     const sql = readFileSync(join(dir, name, "migration.sql"), "utf8");
-    const id = `${name}-${crypto.randomUUID()}`;
+    const id = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       console.log("applying", name);
       await db.executeMultiple(sql);

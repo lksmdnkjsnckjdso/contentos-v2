@@ -82,9 +82,24 @@ export async function scrapeInstagramProfile(
   };
 }
 
+/**
+ * Routes a fetch through a rotating proxy when SCRAPE_PROXY_URL is set
+ * (ScraperAPI / ZenRows / ScrapingBee style, "{url}" placeholder supported).
+ * Needed on serverless hosts (Vercel) whose datacenter IPs Instagram blocks.
+ */
+function proxiedFetch(url: string, init: RequestInit): Promise<Response> {
+  const template = process.env.SCRAPE_PROXY_URL;
+  if (!template) return fetch(url, init);
+  const target = encodeURIComponent(url);
+  const proxyUrl = template.includes("{url}")
+    ? template.replace("{url}", target)
+    : template + target;
+  return fetch(proxyUrl, init);
+}
+
 async function tryApiProfile(username: string): Promise<ScrapedProfile | null> {
   try {
-    const res = await fetch(
+    const res = await proxiedFetch(
       `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
       {
         headers: {
@@ -178,7 +193,7 @@ function parseCount(s: string | undefined): number {
  */
 async function tryMobileWebProfile(username: string): Promise<ScrapedProfile | null> {
   try {
-    const res = await fetch(`https://m.instagram.com/${encodeURIComponent(username)}/`, {
+    const res = await proxiedFetch(`https://m.instagram.com/${encodeURIComponent(username)}/`, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
