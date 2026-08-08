@@ -5,6 +5,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
 
 const url = process.env.DATABASE_URL;
@@ -16,6 +17,16 @@ async function main() {
   }
   const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
   const dir = join(process.cwd(), "prisma", "migrations");
+  await db.execute(`CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+    "id" TEXT PRIMARY KEY NOT NULL,
+    "checksum" TEXT NOT NULL,
+    "finished_at" DATETIME,
+    "migration_name" TEXT NOT NULL,
+    "logs" TEXT,
+    "rolled_back_at" DATETIME,
+    "started_at" DATETIME NOT NULL DEFAULT current_timestamp,
+    "applied_steps_count" INTEGER UNSIGNED NOT NULL DEFAULT 0
+  )`);
   const applied = new Set<string>();
   try {
     const rows = await db.execute('SELECT migration_name FROM "_prisma_migrations"');
@@ -32,13 +43,23 @@ async function main() {
   for (const name of dirs) {
     if (applied.has(name)) continue;
     const sql = readFileSync(join(dir, name, "migration.sql"), "utf8");
-    console.log("applying", name);
-    await db.executeMultiple(sql);
+    const id = `${name}-${crypto.randomUUID()}`;
+    try {
+      console.log("applying", name);
+      await db.executeMultiple(sql);
+      console.log("  ok");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/already exists|duplicate column/i.test(msg)) {
+        console.log("  already applied — marking as done");
+      } else {
+        throw e;
+      }
+    }
     await db.execute({
-      sql: 'INSERT INTO "_prisma_migrations" (migration_name, started_at, finished_at, applied_steps_count, logs, rolled_back_at) VALUES (?, ?, ?, ?, ?, NULL)',
-      args: [name, new Date().toISOString(), new Date().toISOString(), 1, null],
+      sql: 'INSERT INTO "_prisma_migrations" (id, checksum, migration_name, started_at, finished_at, applied_steps_count, logs, rolled_back_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)',
+      args: [id, "remote-sync", name, new Date().toISOString(), new Date().toISOString(), 1],
     });
-    console.log("  ok");
   }
 
   console.log("done — all migrations applied");
