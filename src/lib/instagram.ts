@@ -89,19 +89,23 @@ export async function scrapeInstagramProfile(
  * Hosted Instagram scraper (Apify actor) — the fallback that works from
  * serverless hosts like Vercel, where Instagram blocks direct requests.
  * Requires APIFY_TOKEN (and optionally APIFY_ACTOR_ID, default:
- * clockworks/free-instagram-scraper).
+ * apify/instagram-scraper — "details" mode, ~$2.70 per 1,000 profiles).
  */
 async function tryApifyProfile(username: string): Promise<ScrapedProfile | null> {
   const token = process.env.APIFY_TOKEN;
   if (!token) return null;
-  const actorId = process.env.APIFY_ACTOR_ID ?? "clockworks/free-instagram-scraper";
+  const actorId = (process.env.APIFY_ACTOR_ID ?? "apify/instagram-scraper").replace("/", "~");
   try {
     const res = await fetch(
       `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=120`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ usernames: [username.replace("@", "")] }),
+        body: JSON.stringify({
+          resultsType: "details",
+          directUrls: [`https://www.instagram.com/${username.replace("@", "")}/`],
+          resultsLimit: 1,
+        }),
         cache: "no-store",
         signal: AbortSignal.timeout(120_000),
       }
@@ -111,28 +115,35 @@ async function tryApifyProfile(username: string): Promise<ScrapedProfile | null>
       username?: string;
       fullName?: string | null;
       followersCount?: number;
-      followingCount?: number;
+      followsCount?: number;
       postsCount?: number;
       biography?: string | null;
-      isPrivate?: boolean;
-      recentPosts?: { caption?: string | null; likesCount?: number; commentsCount?: number; timestamp?: string; mediaType?: string }[];
+      private?: boolean;
+      profilePicUrlHD?: string | null;
+      latestPosts?: {
+        type?: string;
+        caption?: string | null;
+        likesCount?: number;
+        commentsCount?: number;
+        timestamp?: string;
+      }[];
     }[];
-    const item = items[0];
+    const item = items.find((i) => i.username) ?? items[0];
     if (!item?.username) throw new Error("Apify returned no profile");
 
     return {
       username: item.username,
       fullName: item.fullName ?? null,
       followers: item.followersCount ?? 0,
-      following: item.followingCount ?? 0,
+      following: item.followsCount ?? 0,
       posts: item.postsCount ?? 0,
       biography: item.biography ?? null,
-      profilePic: null,
-      recentPosts: (item.recentPosts ?? []).slice(0, 12).map((p) => ({
+      profilePic: item.profilePicUrlHD ?? null,
+      recentPosts: (item.latestPosts ?? []).slice(0, 12).map((p) => ({
         caption: p.caption ?? null,
         likes: p.likesCount ?? 0,
         comments: p.commentsCount ?? 0,
-        mediaType: p.mediaType ?? null,
+        mediaType: p.type ?? null,
         timestamp: p.timestamp ? Math.floor(new Date(p.timestamp).getTime() / 1000) : 0,
       })),
       source: "scrape",
