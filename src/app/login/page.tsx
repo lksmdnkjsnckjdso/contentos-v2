@@ -1,58 +1,34 @@
 "use client";
 
 import * as React from "react";
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { SignIn, SignUp } from "@clerk/nextjs";
 import { LogoMark } from "@/components/app-shell/sidebar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { registerUser } from "@/app/actions/auth";
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [mode, setMode] = React.useState<"signin" | "signup">(
     searchParams.get("mode") === "signup" ? "signup" : "signin"
   );
-  const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("demo@contentos.app");
-  const [password, setPassword] = React.useState("demo");
-  const [busy, setBusy] = React.useState<"credentials" | "google" | null>(null);
 
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
-
-  const doCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim()) {
-      toast.error("Enter your email");
-      return;
-    }
-    if (mode === "signup" && password.length < 8) {
-      toast.error("Password must be at least 8 characters");
-      return;
-    }
-    setBusy("credentials");
-
-    if (mode === "signup") {
-      const reg = await registerUser({ name, email, password });
-      if (!reg.ok) {
-        setBusy(null);
-        toast.error(reg.error);
-        return;
-      }
-    }
-
-    const res = await signIn("credentials", { email, password, redirect: false });
-    setBusy(null);
-    if (res?.error) {
-      toast.error(mode === "signin" ? "Invalid email or password" : "Sign-up failed — try again");
-      return;
-    }
-    router.push(callbackUrl);
-    router.refresh();
+  const appearance = {
+    elements: {
+      card: "shadow-none border border-border rounded-xl",
+      headerTitle: "text-xl font-semibold tracking-tight",
+      headerSubtitle: "text-sm text-muted-foreground",
+      formButtonPrimary:
+        "bg-primary text-primary-foreground hover:bg-primary/90 shadow-none rounded-md font-medium",
+      formFieldInput:
+        "rounded-md border-border bg-background text-sm h-9 px-3 shadow-none",
+      formFieldLabel: "text-xs font-medium text-muted-foreground",
+      dividerLine: "bg-border",
+      dividerText: "text-xs text-muted-foreground",
+      footerActionLink: "text-primary font-medium",
+      footerActionText: "text-sm text-muted-foreground",
+      socialButtonsBlockButton:
+        "rounded-md border-border text-foreground bg-background hover:bg-muted/50 font-medium",
+    },
   };
 
   return (
@@ -86,62 +62,26 @@ function LoginForm() {
               Content<span className="text-primary">OS</span>
             </span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {mode === "signin" ? "Welcome back" : "Create your account"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "signin"
-              ? "Sign in to your content operating system."
-              : "Start planning, publishing and analyzing your personal brand."}
-          </p>
 
-          <form onSubmit={doCredentials} className="mt-8 space-y-4">
-            {mode === "signup" && (
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  autoComplete="name"
-                  placeholder="Your name"
-                />
-              </div>
+          <div className="mt-8">
+            {mode === "signin" ? (
+              <SignIn
+                appearance={appearance}
+                routing="hash"
+                fallbackRedirectUrl="/dashboard"
+                signUpUrl="/login?mode=signup"
+              />
+            ) : (
+              <SignUp
+                appearance={appearance}
+                routing="hash"
+                fallbackRedirectUrl="/dashboard"
+                signInUrl="/login"
+              />
             )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                placeholder={mode === "signup" ? "At least 8 characters" : undefined}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={busy !== null}>
-              {busy === "credentials"
-                ? mode === "signin"
-                  ? "Signing in…"
-                  : "Creating account…"
-                : mode === "signin"
-                  ? "Sign in"
-                  : "Create account"}
-            </Button>
-          </form>
+          </div>
 
-          <p className="mt-4 text-center text-sm text-muted-foreground">
+          <p className="mt-6 text-center text-sm text-muted-foreground">
             {mode === "signin" ? (
               <>
                 New here?{" "}
@@ -166,47 +106,6 @@ function LoginForm() {
               </>
             )}
           </p>
-
-          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            or
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={busy !== null}
-            onClick={async () => {
-              setBusy("google");
-              try {
-                await signIn("google", { callbackUrl });
-              } catch {
-                toast.error("Google sign-in is not configured on this deployment");
-              }
-              setBusy(null);
-            }}
-          >
-            <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1Z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.1A6.6 6.6 0 0 1 5.5 12c0-.73.13-1.44.34-2.1V7.06H2.18A11 11 0 0 0 1 12c0 1.78.43 3.45 1.18 4.94l3.66-2.84Z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 12 1a11 11 0 0 0-9.82 6.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
-              />
-            </svg>
-            Continue with Google
-          </Button>
         </div>
       </div>
     </div>

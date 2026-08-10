@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { prisma } from "../src/lib/db";
 
 // deterministic RNG
@@ -34,7 +33,6 @@ async function main() {
     data: {
       email: "demo@contentos.app",
       name: "Maya Reyes",
-      passwordHash: bcrypt.hashSync("demo", 10),
       tier: "PRO",
       onboardingStep: 5,
       onboardingDone: true,
@@ -340,7 +338,7 @@ async function main() {
   }
 
   console.log("Seed complete.");
-  console.log(`  User: demo@contentos.app / demo`);
+  console.log(`  User: demo@contentos.app`);
   console.log(`  Account: @maya.builds (${followers.toLocaleString()} followers)`);
   console.log(`  Snapshots: ${snapshots.length}, Posts: ${posts.length}`);
 }

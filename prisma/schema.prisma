@@ -37,8 +37,8 @@ enum SnapshotSource {
 
 model User {
   id               String            @id @default(cuid())
+  externalId       String?           @unique
   email            String            @unique
-  passwordHash     String?
   name             String?
   image            String?
   tier             Tier              @default(FREE)
