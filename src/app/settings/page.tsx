@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, XCircle, KeyRound, Zap } from "lucide-react";
 import { InstagramCard } from "@/components/settings/instagram-card";
-import { instagramConfigured } from "@/lib/instagram-graph";
+import { instagramConfigured, instagramDemoMode } from "@/lib/instagram-graph";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +20,8 @@ export default async function SettingsPage({
   if (!user) redirect("/login?callbackUrl=/settings");
 
   const params = await searchParams;
-  const userRow = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  const account = userRow
-    ? await prisma.instagramAccount.findFirst({ where: { userId: userRow.id }, orderBy: { updatedAt: "desc" } })
+  const account = user
+    ? await prisma.instagramAccount.findFirst({ where: { userId: user.id }, orderBy: { updatedAt: "desc" } })
     : null;
 
   const queryNotice =
@@ -45,7 +44,7 @@ export default async function SettingsPage({
       icon: Zap,
       title: "Pro plan",
       desc: "Unlimited drafts, 5 competitors, advanced analytics.",
-      state: userRow?.tier ?? "FREE",
+      state: user?.tier ?? "FREE",
       ok: true,
       detail: null,
     },
@@ -61,15 +60,31 @@ export default async function SettingsPage({
           source={account?.source ?? null}
           updatedAt={account?.updatedAt ?? null}
           queryNotice={queryNotice}
+          liveEnabled={instagramConfigured}
         />
         {!instagramConfigured && (
           <p className="text-xs text-muted-foreground">
-            Live sync is disabled — set{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_ID</code>,{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_SECRET</code> and{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_REDIRECT_URI</code> in{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">.env.local</code> to enable it. For a
-            sandboxed demo, set <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_DEMO=true</code>.
+            {instagramDemoMode ? (
+              <>
+                Demo mode — profile sync uses public scrape. To enable{" "}
+                <span className="font-medium text-foreground">live sync</span> (official Instagram Graph API data), add
+                Meta app credentials:{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_ID</code>,{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_SECRET</code> and{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_REDIRECT_URI</code> in{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">.env.local</code>, then set{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_DEMO=false</code>.
+              </>
+            ) : (
+              <>
+                Live sync is disabled — set{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_ID</code>,{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_CLIENT_SECRET</code> and{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_REDIRECT_URI</code> in{" "}
+                <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">.env.local</code> to enable it. For
+                a sandboxed demo, set <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">INSTAGRAM_DEMO=true</code>.
+              </>
+            )}
           </p>
         )}
         {items.map((it) => (

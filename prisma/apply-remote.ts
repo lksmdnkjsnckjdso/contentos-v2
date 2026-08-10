@@ -45,10 +45,21 @@ async function main() {
     const id = `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     try {
       console.log("applying", name);
-      await db.executeMultiple(sql);
+      const statements = sql
+        .replace(/^\s*--.*$/gm, "")
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      for (const statement of statements) {
+        await db.execute(statement);
+      }
       console.log("  ok");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const cause: unknown = (e as { cause?: unknown })?.cause;
+      const msg = [
+        e instanceof Error ? e.message : String(e),
+        cause instanceof Error ? cause.message : cause ? String(cause) : "",
+      ].join(" | ");
       if (/already exists|duplicate column/i.test(msg)) {
         console.log("  already applied — marking as done");
       } else {

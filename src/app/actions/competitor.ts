@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth-guard";
 import { scrapeInstagramProfile, deriveScrapeMetrics } from "@/lib/instagram";
 import { parseCompetitorCsv } from "@/lib/csv";
 import {
@@ -23,8 +24,8 @@ export async function discoverCompetitors(input: {
   const audience = input.audience.trim();
   if (!niche) return { ok: false as const, error: "Niche is required" };
 
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const system = `You are a growth strategist building a competitive intelligence database for a personal brand.
 
@@ -90,8 +91,8 @@ ${audience || "n/a"}`;
 }
 
 export async function addDiscoveredCompetitor(input: DiscoveredCompetitor) {
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const competitor = await prisma.competitor.upsert({
     where: { userId_username: { userId: user.id, username: input.username } },
@@ -131,8 +132,8 @@ export async function importCompetitorsCsv(formData: FormData) {
     return { ok: false as const, error: errors[0] ?? "No valid rows found", errors };
   }
 
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const seen = new Set<string>();
   const deduped = rows.filter((r) => {
@@ -178,8 +179,8 @@ export async function analyzeCompetitor(usernameInput: string) {
   if (!/^[a-zA-Z0-9._]{1,30}$/.test(username))
     return { ok: false as const, error: "Invalid Instagram username" };
 
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const scraped = await scrapeInstagramProfile(username);
 

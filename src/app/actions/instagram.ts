@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth-guard";
 import { scrapeInstagramProfile, deriveScrapeMetrics } from "@/lib/instagram";
 import {
   instagramConfigured,
@@ -156,8 +157,8 @@ async function scrapeAndPersist(handleInput: string, user: { id: string }) {
  * Used as the no-credentials path (OAuth Connect is the upgrade).
  */
 export async function connectByHandle(handleInput: string) {
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const res = await scrapeAndPersist(handleInput, user);
   if (!res.ok) return res;
@@ -193,8 +194,8 @@ export async function connectInstagram() {
 
 export async function completeInstagramConnect(code: string, state: string) {
   if (state !== OAUTH_STATE) return { ok: false as const, error: "Invalid OAuth state" };
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const exchanged = await exchangeInstagramCode(code);
   const profile = await fetchIgProfile(exchanged.accessToken);
@@ -256,8 +257,8 @@ export async function completeInstagramConnect(code: string, state: string) {
 }
 
 export async function syncInstagram() {
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const account = await prisma.instagramAccount.findFirst({ where: { userId: user.id } });
   if (!account || !account.connected) {
@@ -371,8 +372,8 @@ export async function syncInstagram() {
 }
 
 export async function disconnectInstagram() {
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
   await prisma.instagramAccount.updateMany({
     where: { userId: user.id },
     data: { connected: false, accessToken: null, tokenExpiresAt: null },

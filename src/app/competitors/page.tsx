@@ -10,8 +10,8 @@ export default async function CompetitorsPage() {
   const user = await requireUser();
   if (!user) redirect("/login?callbackUrl=/competitors");
 
-  const userRow = await prisma.user.findFirst({
-    orderBy: { createdAt: "asc" },
+  const userRow = await prisma.user.findUnique({
+    where: { id: user.id },
     include: { brandConfig: true },
   });
   const competitors = userRow

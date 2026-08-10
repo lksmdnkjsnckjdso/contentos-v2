@@ -17,6 +17,7 @@ export function InstagramCard({
   source,
   updatedAt,
   queryNotice,
+  liveEnabled,
 }: {
   connected: boolean;
   username: string | null;
@@ -24,6 +25,7 @@ export function InstagramCard({
   source: string | null;
   updatedAt: Date | null;
   queryNotice: { kind: "connected" | "error"; message: string } | null;
+  liveEnabled: boolean;
 }) {
   const router = useRouter();
   const [handle, setHandle] = React.useState(username ? `@${username}` : "@");
@@ -143,7 +145,12 @@ export function InstagramCard({
               </Button>
             </>
           ) : (
-            <Button size="sm" onClick={doConnect} disabled={busy !== null}>
+            <Button
+              size="sm"
+              onClick={doConnect}
+              disabled={busy !== null || !liveEnabled}
+              title={liveEnabled ? undefined : "Add Meta app credentials in .env.local to enable OAuth"}
+            >
               {busy === "connect" ? <Loader2 className="size-4 animate-spin" /> : <AtSign className="size-4" />}
               OAuth Connect
             </Button>

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth-guard";
 import { chatJSON, draftSchema, draftExample } from "@/lib/groq";
 
 export async function createSlot(input: {
@@ -20,8 +21,8 @@ export async function createSlot(input: {
     .safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Invalid slot data" };
 
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false as const, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false as const, error: "Not signed in" };
 
   const slot = await prisma.contentSlot.create({
     data: {

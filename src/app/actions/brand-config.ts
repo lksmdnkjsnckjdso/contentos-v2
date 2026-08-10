@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/lib/auth-guard";
 
 const inputSchema = z.object({
   niche: z.string(),
@@ -19,8 +20,8 @@ export async function saveBrandConfig(input: z.infer<typeof inputSchema>) {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid input" };
 
-  const user = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } });
-  if (!user) return { ok: false, error: "No user — run the seed first" };
+  const user = await requireUser();
+  if (!user) return { ok: false, error: "Not signed in" };
 
   await prisma.brandConfig.upsert({
     where: { userId: user.id },

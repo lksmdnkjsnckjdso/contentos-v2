@@ -9,24 +9,49 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { registerUser } from "@/app/actions/auth";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mode, setMode] = React.useState<"signin" | "signup">(
+    searchParams.get("mode") === "signup" ? "signup" : "signin"
+  );
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("demo@contentos.app");
   const [password, setPassword] = React.useState("demo");
   const [busy, setBusy] = React.useState<"credentials" | "google" | null>(null);
 
-  const doDemo = async (e: React.FormEvent) => {
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
+
+  const doCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Enter your email");
+      return;
+    }
+    if (mode === "signup" && password.length < 8) {
+      toast.error("Password must be at least 8 characters");
+      return;
+    }
     setBusy("credentials");
+
+    if (mode === "signup") {
+      const reg = await registerUser({ name, email, password });
+      if (!reg.ok) {
+        setBusy(null);
+        toast.error(reg.error);
+        return;
+      }
+    }
+
     const res = await signIn("credentials", { email, password, redirect: false });
     setBusy(null);
     if (res?.error) {
-      toast.error("Invalid credentials");
+      toast.error(mode === "signin" ? "Invalid email or password" : "Sign-up failed — try again");
       return;
     }
-    router.push(searchParams.get("callbackUrl") ?? "/dashboard");
+    router.push(callbackUrl);
     router.refresh();
   };
 
@@ -61,12 +86,29 @@ function LoginForm() {
               Content<span className="text-primary">OS</span>
             </span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {mode === "signin" ? "Welcome back" : "Create your account"}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in to your content operating system.
+            {mode === "signin"
+              ? "Sign in to your content operating system."
+              : "Start planning, publishing and analyzing your personal brand."}
           </p>
 
-          <form onSubmit={doDemo} className="mt-8 space-y-4">
+          <form onSubmit={doCredentials} className="mt-8 space-y-4">
+            {mode === "signup" && (
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  placeholder="Your name"
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -84,17 +126,50 @@ function LoginForm() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                placeholder={mode === "signup" ? "At least 8 characters" : undefined}
               />
             </div>
             <Button type="submit" className="w-full" disabled={busy !== null}>
-              {busy === "credentials" ? "Signing in…" : "Sign in"}
+              {busy === "credentials"
+                ? mode === "signin"
+                  ? "Signing in…"
+                  : "Creating account…"
+                : mode === "signin"
+                  ? "Sign in"
+                  : "Create account"}
             </Button>
           </form>
 
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            {mode === "signin" ? (
+              <>
+                New here?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("signup")}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMode("signin")}
+                  className="font-medium text-primary hover:underline"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
+
           <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
             <div className="h-px flex-1 bg-border" />
-            demo access
+            or
             <div className="h-px flex-1 bg-border" />
           </div>
 
@@ -104,7 +179,12 @@ function LoginForm() {
             disabled={busy !== null}
             onClick={async () => {
               setBusy("google");
-              await signIn("google", { callbackUrl: searchParams.get("callbackUrl") ?? "/dashboard" });
+              try {
+                await signIn("google", { callbackUrl });
+              } catch {
+                toast.error("Google sign-in is not configured on this deployment");
+              }
+              setBusy(null);
             }}
           >
             <svg viewBox="0 0 24 24" className="size-4" aria-hidden>
@@ -127,11 +207,6 @@ function LoginForm() {
             </svg>
             Continue with Google
           </Button>
-
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Demo mode: use the prefilled credentials, or configure Google OAuth in{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">.env.local</code>.
-          </p>
         </div>
       </div>
     </div>
