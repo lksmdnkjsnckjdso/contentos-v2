@@ -57,7 +57,8 @@ export function deriveScrapeMetrics(scraped: ScrapedProfile) {
 /**
  * Tries to scrape a public Instagram profile. Instagram actively blocks
  * unauthenticated access, so this is best-effort: the internal API first,
- * then the mobile web page (real counts), and finally a `fallback`-flagged
+ * then the mobile web page (real counts), then Firecrawl's hosted renderer
+ * (works from serverless hosts like Vercel), and finally a `fallback`-flagged
  * stub so the pipeline (and the UI) never breaks.
  */
 export async function scrapeInstagramProfile(
@@ -69,8 +70,8 @@ export async function scrapeInstagramProfile(
   const fromWeb = await tryMobileWebProfile(username);
   if (fromWeb) return fromWeb;
 
-  const fromApify = await tryApifyProfile(username);
-  if (fromApify) return fromApify;
+  const fromFirecrawl = await tryFirecrawlProfile(username);
+  if (fromFirecrawl) return fromFirecrawl;
 
   return {
     username: username.replace("@", ""),
@@ -86,68 +87,36 @@ export async function scrapeInstagramProfile(
 }
 
 /**
- * Hosted Instagram scraper (Apify actor) — the fallback that works from
+ * Hosted browser rendering via Firecrawl — the fallback that works from
  * serverless hosts like Vercel, where Instagram blocks direct requests.
- * Requires APIFY_TOKEN (and optionally APIFY_ACTOR_ID, default:
- * apify/instagram-scraper — "details" mode, ~$2.70 per 1,000 profiles).
+ * Requires FIRECRAWL_API_KEY (https://firecrawl.dev). ~1 credit per profile;
+ * free tier includes 500 credits/month.
  */
-async function tryApifyProfile(username: string): Promise<ScrapedProfile | null> {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return null;
-  const actorId = (process.env.APIFY_ACTOR_ID ?? "apify/instagram-scraper").replace("/", "~");
+async function tryFirecrawlProfile(username: string): Promise<ScrapedProfile | null> {
+  const key = process.env.FIRECRAWL_API_KEY;
+  if (!key) return null;
   try {
-    const res = await fetch(
-      `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(token)}&timeout=120`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          resultsType: "details",
-          directUrls: [`https://www.instagram.com/${username.replace("@", "")}/`],
-          resultsLimit: 1,
-        }),
-        cache: "no-store",
-        signal: AbortSignal.timeout(120_000),
-      }
-    );
-    if (!res.ok) throw new Error(`Apify returned ${res.status}`);
-    const items = (await res.json()) as {
-      username?: string;
-      fullName?: string | null;
-      followersCount?: number;
-      followsCount?: number;
-      postsCount?: number;
-      biography?: string | null;
-      private?: boolean;
-      profilePicUrlHD?: string | null;
-      latestPosts?: {
-        type?: string;
-        caption?: string | null;
-        likesCount?: number;
-        commentsCount?: number;
-        timestamp?: string;
-      }[];
-    }[];
-    const item = items.find((i) => i.username) ?? items[0];
-    if (!item?.username) throw new Error("Apify returned no profile");
-
-    return {
-      username: item.username,
-      fullName: item.fullName ?? null,
-      followers: item.followersCount ?? 0,
-      following: item.followsCount ?? 0,
-      posts: item.postsCount ?? 0,
-      biography: item.biography ?? null,
-      profilePic: item.profilePicUrlHD ?? null,
-      recentPosts: (item.latestPosts ?? []).slice(0, 12).map((p) => ({
-        caption: p.caption ?? null,
-        likes: p.likesCount ?? 0,
-        comments: p.commentsCount ?? 0,
-        mediaType: p.type ?? null,
-        timestamp: p.timestamp ? Math.floor(new Date(p.timestamp).getTime() / 1000) : 0,
-      })),
-      source: "scrape",
+    const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        url: `https://m.instagram.com/${encodeURIComponent(username)}/`,
+        formats: ["html"],
+        onlyMainContent: false,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (!res.ok) throw new Error(`Firecrawl returned ${res.status}`);
+    const json = (await res.json()) as {
+      success?: boolean;
+      data?: { html?: string };
     };
+    if (!json.success || !json.data?.html) throw new Error("Firecrawl returned no html");
+    return parseMobileWebHtml(json.data.html, username);
   } catch {
     return null;
   }
@@ -273,32 +242,34 @@ async function tryMobileWebProfile(username: string): Promise<ScrapedProfile | n
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) return null;
-    const html = await res.text();
-
-    const ogDesc = html.match(/og:description" content="([^"]+)"/)?.[1];
-    if (!ogDesc) return null;
-    const counts = ogDesc.match(
-      /([\d.,]+[KM]?)\s*Followers?\s*,\s*([\d.,]+[KM]?)\s*Following\s*,\s*([\d.,]+[KM]?)\s*Posts?/i
-    );
-    if (!counts) return null;
-
-    const ogTitle = html.match(/og:title" content="([^"]+)"/)?.[1];
-    const fullName = ogTitle
-      ? decodeEntities(ogTitle).replace(/\(\s*@.+/i, "").replace(/\s*•.*$/, "").trim() || null
-      : null;
-
-    return {
-      username: username.replace("@", ""),
-      fullName,
-      followers: parseCount(counts[1]),
-      following: parseCount(counts[2]),
-      posts: parseCount(counts[3]),
-      biography: null,
-      profilePic: null,
-      recentPosts: [],
-      source: "scrape",
-    };
+    return parseMobileWebHtml(await res.text(), username);
   } catch {
     return null;
   }
+}
+
+function parseMobileWebHtml(html: string, username: string): ScrapedProfile | null {
+  const ogDesc = html.match(/og:description" content="([^"]+)"/)?.[1];
+  if (!ogDesc) return null;
+  const counts = ogDesc.match(
+    /([\d.,]+[KM]?)\s*Followers?\s*,\s*([\d.,]+[KM]?)\s*Following\s*,\s*([\d.,]+[KM]?)\s*Posts?/i
+  );
+  if (!counts) return null;
+
+  const ogTitle = html.match(/og:title" content="([^"]+)"/)?.[1];
+  const fullName = ogTitle
+    ? decodeEntities(ogTitle).replace(/\(\s*@.+/i, "").replace(/\s*•.*$/, "").trim() || null
+    : null;
+
+  return {
+    username: username.replace("@", ""),
+    fullName,
+    followers: parseCount(counts[1]),
+    following: parseCount(counts[2]),
+    posts: parseCount(counts[3]),
+    biography: null,
+    profilePic: null,
+    recentPosts: [],
+    source: "scrape",
+  };
 }
