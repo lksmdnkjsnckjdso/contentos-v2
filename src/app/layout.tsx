@@ -21,13 +21,14 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const authEnabled = process.env.AUTH_ENABLED === "true";
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background">
-        <ClerkProvider>{children}</ClerkProvider>
+        {authEnabled ? <ClerkProvider>{children}</ClerkProvider> : children}
         <Toaster position="bottom-right" />
       </body>
     </html>

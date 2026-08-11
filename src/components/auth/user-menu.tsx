@@ -2,17 +2,27 @@
 
 import { useUser, useClerk } from "@clerk/nextjs";
 
+const authEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true";
+
 export function UserMenu() {
+  // Demo mode (no ClerkProvider mounted) — static placeholder.
+  if (!authEnabled) return <DemoAvatar />;
+  return <ClerkUserMenu />;
+}
+
+function DemoAvatar() {
+  return (
+    <div className="size-8 rounded-full bg-gradient-to-br from-primary to-chart-3 grid place-items-center text-primary-foreground text-xs font-semibold">
+      MR
+    </div>
+  );
+}
+
+function ClerkUserMenu() {
   const { user } = useUser();
   const { signOut } = useClerk();
 
-  if (!user) {
-    return (
-      <div className="size-8 rounded-full bg-gradient-to-br from-primary to-chart-3 grid place-items-center text-primary-foreground text-xs font-semibold">
-        MR
-      </div>
-    );
-  }
+  if (!user) return <DemoAvatar />;
 
   const name = user.fullName ?? user.username ?? user.emailAddresses[0]?.emailAddress ?? "User";
 
