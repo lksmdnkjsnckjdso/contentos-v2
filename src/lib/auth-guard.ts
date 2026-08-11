@@ -33,25 +33,36 @@ export async function requireUser(): Promise<CurrentUser | null> {
 
   const { clerkClient } = await import("@clerk/nextjs/server");
   const clerkUser = await (await clerkClient()).users.getUser(userId);
-  const email = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)?.emailAddress
+  const email =
+    clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)?.emailAddress
     ?? clerkUser.emailAddresses[0]?.emailAddress;
   if (!email) return null;
 
-  const created = await prisma.user.upsert({
-    where: { externalId: userId },
-    update: {
-      email,
-      name: clerkUser.fullName ?? clerkUser.username ?? email.split("@")[0],
-      image: clerkUser.imageUrl || null,
-    },
-    create: {
-      externalId: userId,
-      email,
-      name: clerkUser.fullName ?? clerkUser.username ?? email.split("@")[0],
-      image: clerkUser.imageUrl || null,
-    },
-  });
-  return pick(created);
+  const name = clerkUser.fullName ?? clerkUser.username ?? email.split("@")[0];
+  const image = clerkUser.imageUrl || null;
+
+  // An account may already exist for this email (e.g. seeded demo user) —
+  // claim it by setting externalId instead of colliding on the unique index.
+  const byEmail = await prisma.user.findUnique({ where: { email } });
+  if (byEmail) {
+    const claimed = await prisma.user.update({
+      where: { id: byEmail.id },
+      data: { externalId: userId, name, image },
+    });
+    return pick(claimed);
+  }
+
+  try {
+    const created = await prisma.user.create({
+      data: { externalId: userId, email, name, image },
+    });
+    return pick(created);
+  } catch {
+    // Concurrent first sign-in — another request may have just created the row.
+    const retried = await prisma.user.findUnique({ where: { externalId: userId } });
+    if (retried) return pick(retried);
+    throw new Error("Failed to sync Clerk user into the database");
+  }
 }
 
 /**

@@ -68,6 +68,7 @@ function LoginForm() {
               <SignIn
                 appearance={appearance}
                 routing="hash"
+                forceRedirectUrl="/dashboard"
                 fallbackRedirectUrl="/dashboard"
                 signUpUrl="/login?mode=signup"
               />
@@ -75,6 +76,7 @@ function LoginForm() {
               <SignUp
                 appearance={appearance}
                 routing="hash"
+                forceRedirectUrl="/dashboard"
                 fallbackRedirectUrl="/dashboard"
                 signInUrl="/login"
               />
