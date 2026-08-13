@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import { ClerkProvider } from "@clerk/nextjs";
+import { isClerkAuthEnabledForHost } from "@/lib/auth-config";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -20,8 +22,10 @@ export const metadata: Metadata = {
     "Setup guide, analytics, competitor intelligence and an AI content calendar for your personal brand.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
-  const authEnabled = process.env.AUTH_ENABLED === "true";
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const h = await headers();
+  const hostname = h.get("host")?.split(":")[0] ?? null;
+  const authEnabled = isClerkAuthEnabledForHost(hostname);
   return (
     <html
       lang="en"

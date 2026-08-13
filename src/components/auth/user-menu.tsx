@@ -1,12 +1,11 @@
 "use client";
 
 import { useUser, useClerk } from "@clerk/nextjs";
-
-const authEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true";
+import { isClerkAuthEnabledClient } from "@/lib/auth-config";
 
 export function UserMenu() {
   // Demo mode (no ClerkProvider mounted) — static placeholder.
-  if (!authEnabled) return <DemoAvatar />;
+  if (!isClerkAuthEnabledClient()) return <DemoAvatar />;
   return <ClerkUserMenu />;
 }
 

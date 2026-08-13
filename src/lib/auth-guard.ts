@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
-
-export const authEnabled = process.env.AUTH_ENABLED === "true";
+import { isClerkAuthEnabledForHost } from "@/lib/auth-config";
 
 export type CurrentUser = {
   id: string;
@@ -19,7 +19,9 @@ export type CurrentUser = {
  * browsable without Clerk keys.
  */
 export async function requireUser(): Promise<CurrentUser | null> {
-  if (!authEnabled) {
+  const h = await headers();
+  const hostname = h.get("host")?.split(":")[0] ?? null;
+  if (!isClerkAuthEnabledForHost(hostname)) {
     const demo = await prisma.user.findUnique({ where: { email: "demo@contentos.app" } });
     if (demo) return pick(demo);
     return { id: "demo", email: "demo@contentos.app", name: "Maya Reyes", image: null, tier: "FREE" };
