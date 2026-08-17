@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/auth-guard";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { CompetitorsView } from "@/components/competitors/competitors-view";
+import { IntelligenceDashboard } from "@/components/competitors/intelligence/intelligence-dashboard";
+import { buildIntelligence, type IntelInput } from "@/lib/intelligence-data";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export default async function CompetitorsPage() {
   const competitors = userRow
     ? await prisma.competitor.findMany({
         where: { userId: userRow.id },
-        include: { snapshots: { orderBy: { date: "desc" }, take: 1 } },
+        include: { snapshots: { orderBy: { date: "asc" } } },
         orderBy: { lastAnalyzedAt: "desc" },
       })
     : [];
@@ -30,7 +32,12 @@ export default async function CompetitorsPage() {
     : null;
 
   const rows = competitors.map((c) => {
-    const s = c.snapshots[0];
+    const s = c.snapshots[c.snapshots.length - 1];
+    const first = c.snapshots[0];
+    const followerDelta30d =
+      s && first && first.followers > 0
+        ? ((s.followers - first.followers) / first.followers) * 100
+        : 0;
     return {
       id: c.id,
       username: c.username,
@@ -48,6 +55,7 @@ export default async function CompetitorsPage() {
       engagementRate: s?.engagementRate ?? 0,
       postingFrequency: s?.postingFrequency ?? 0,
       avgLikes: s?.avgLikes ?? 0,
+      followerDelta30d,
       topHashtags: s ? JSON.parse(s.topHashtags) : [],
       themes: s ? JSON.parse(s.themes) : [],
       reportJson: s?.reportJson ?? null,
@@ -55,34 +63,51 @@ export default async function CompetitorsPage() {
     };
   });
 
+  const niche = userRow?.brandConfig?.niche ?? "";
+  const intelInputs: IntelInput[] = rows.map((r) => ({
+    username: r.username,
+    displayName: r.displayName,
+    category: r.category,
+    followers: r.followers,
+    engagementRate: r.engagementRate,
+    postingFrequency: r.postingFrequency,
+    avgLikes: r.avgLikes,
+    followerDelta30d: r.followerDelta30d,
+    themes: r.themes,
+  }));
+  const intelligence = buildIntelligence(intelInputs, niche);
+
   return (
     <AppShell
       active="/competitors"
-      title="Competitor intelligence"
-      subtitle="Discover, scrape, analyze, and out-position the accounts in your niche"
+      title="Creator intelligence"
+      subtitle="Out-position the accounts in your niche with data, not guesswork"
     >
       <div className="mx-auto max-w-[1400px] px-4 sm:px-8 py-8">
-        <CompetitorsView
-          rows={rows}
-          prefill={{
-            niche: userRow?.brandConfig?.niche ?? "",
-            description: userRow?.brandConfig?.goal ?? "",
-            audience: userRow?.brandConfig?.audience ?? "",
-          }}
-          research={
-            research
-              ? {
-                  nicheSummary: research.nicheSummary,
-                  competitors: JSON.parse(research.competitors),
-                  emergingCreators: JSON.parse(research.emergingCreators),
-                  authorityCreators: JSON.parse(research.authorityCreators),
-                  contentOpportunities: JSON.parse(research.contentOpportunities),
-                  researchRecommendations: JSON.parse(research.researchRecommendations),
-                  createdAt: research.createdAt.toISOString(),
-                }
-              : null
-          }
-        />
+        <IntelligenceDashboard data={intelligence} />
+        <div className="mt-14">
+          <CompetitorsView
+            rows={rows}
+            prefill={{
+              niche: userRow?.brandConfig?.niche ?? "",
+              description: userRow?.brandConfig?.goal ?? "",
+              audience: userRow?.brandConfig?.audience ?? "",
+            }}
+            research={
+              research
+                ? {
+                    nicheSummary: research.nicheSummary,
+                    competitors: JSON.parse(research.competitors),
+                    emergingCreators: JSON.parse(research.emergingCreators),
+                    authorityCreators: JSON.parse(research.authorityCreators),
+                    contentOpportunities: JSON.parse(research.contentOpportunities),
+                    researchRecommendations: JSON.parse(research.researchRecommendations),
+                    createdAt: research.createdAt.toISOString(),
+                  }
+                : null
+            }
+          />
+        </div>
       </div>
     </AppShell>
   );

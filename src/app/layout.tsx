@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "next-themes";
 import { isClerkAuthEnabledForHost } from "@/lib/auth-config";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -30,9 +31,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-background">
-        {authEnabled ? <ClerkProvider>{children}</ClerkProvider> : children}
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          {authEnabled ? <ClerkProvider>{children}</ClerkProvider> : children}
+        </ThemeProvider>
         <Toaster position="bottom-right" />
       </body>
     </html>
