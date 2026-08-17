@@ -1,27 +1,12 @@
 "use client";
 
 import { useUser, useClerk } from "@clerk/nextjs";
-import { isClerkAuthEnabledClient } from "@/lib/auth-config";
 
 export function UserMenu() {
-  // Demo mode (no ClerkProvider mounted) — static placeholder.
-  if (!isClerkAuthEnabledClient()) return <DemoAvatar />;
-  return <ClerkUserMenu />;
-}
-
-function DemoAvatar() {
-  return (
-    <div className="size-8 rounded-full bg-gradient-to-br from-primary to-chart-3 grid place-items-center text-primary-foreground text-xs font-semibold">
-      MR
-    </div>
-  );
-}
-
-function ClerkUserMenu() {
   const { user } = useUser();
   const { signOut } = useClerk();
 
-  if (!user) return <DemoAvatar />;
+  if (!user) return null;
 
   const name = user.fullName ?? user.username ?? user.emailAddresses[0]?.emailAddress ?? "User";
 

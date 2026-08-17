@@ -1,7 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
-import { isClerkAuthEnabledForHost } from "@/lib/auth-config";
 
 export type CurrentUser = {
   id: string;
@@ -14,19 +12,9 @@ export type CurrentUser = {
 /**
  * Resolves the authenticated DB user for server components/actions.
  * Clerk sessions map to the User row via externalId; the row is upserted
- * on first sign-in (profile data comes from Clerk). When auth is disabled
- * (demo mode) the seeded demo user is used, so the app stays fully
- * browsable without Clerk keys.
+ * on first sign-in (profile data comes from Clerk).
  */
 export async function requireUser(): Promise<CurrentUser | null> {
-  const h = await headers();
-  const hostname = h.get("host")?.split(":")[0] ?? null;
-  if (!isClerkAuthEnabledForHost(hostname)) {
-    const demo = await prisma.user.findUnique({ where: { email: "demo@contentos.app" } });
-    if (demo) return pick(demo);
-    return { id: "demo", email: "demo@contentos.app", name: "Maya Reyes", image: null, tier: "FREE" };
-  }
-
   const { userId } = await auth();
   if (!userId) return null;
 

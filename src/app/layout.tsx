@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { headers } from "next/headers";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "next-themes";
-import { isClerkAuthEnabledForHost } from "@/lib/auth-config";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -24,9 +22,6 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const h = await headers();
-  const hostname = h.get("host")?.split(":")[0] ?? null;
-  const authEnabled = isClerkAuthEnabledForHost(hostname);
   return (
     <html
       lang="en"
@@ -35,7 +30,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-background">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          {authEnabled ? <ClerkProvider>{children}</ClerkProvider> : children}
+          <ClerkProvider>{children}</ClerkProvider>
         </ThemeProvider>
         <Toaster position="bottom-right" />
       </body>
